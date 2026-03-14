@@ -443,3 +443,13 @@ def test_duration_cast_to_string_matches_dt_to_string_iso(
         dtype=pl.Duration(time_unit),
     )
     assert_series_equal(s.cast(pl.String), s.dt.to_string("iso"))
+
+
+@pytest.mark.parametrize("time_unit", ["ns", "us", "ms"])
+def test_duration_cast_to_string_lazyframe_schema(time_unit: TimeUnit) -> None:
+    lf = pl.LazyFrame(
+        {"duration": [timedelta(seconds=1)]},
+        schema={"duration": pl.Duration(time_unit)},
+    )
+    schema = lf.select(pl.col("duration").cast(pl.String)).collect_schema()
+    assert schema["duration"] == pl.String
