@@ -224,6 +224,12 @@ def test_comparison_with_string_raises_9461() -> None:
         df.filter(pl.col("duration") > "1h")
 
 
+def test_comparison_with_timedelta() -> None:
+    df = pl.DataFrame({"duration": [timedelta(hours=2)]})
+    result = df.filter(pl.col("duration") > timedelta(hours=1))
+    assert_frame_equal(result, df)
+
+
 def test_duration_invalid_cast_22258() -> None:
     with pytest.raises(pl.exceptions.InvalidOperationError):
         pl.select(a=pl.duration(days=[1, 2, 3, 4]))  # type: ignore[arg-type]
@@ -453,3 +459,49 @@ def test_duration_cast_to_string_lazyframe_schema(time_unit: TimeUnit) -> None:
     )
     schema = lf.select(pl.col("duration").cast(pl.String)).collect_schema()
     assert schema["duration"] == pl.String
+
+
+@pytest.mark.parametrize(
+    ("op", "expected_durations"),
+    [
+        pytest.param(
+            lambda col, val: col > val,
+            [timedelta(hours=3)],
+            id="gt",
+        ),
+        pytest.param(
+            lambda col, val: col < val,
+            [timedelta(hours=1)],
+            id="lt",
+        ),
+        pytest.param(
+            lambda col, val: col >= val,
+            [timedelta(hours=2), timedelta(hours=3)],
+            id="ge",
+        ),
+        pytest.param(
+            lambda col, val: col <= val,
+            [timedelta(hours=1), timedelta(hours=2)],
+            id="le",
+        ),
+        pytest.param(
+            lambda col, val: col == val,
+            [timedelta(hours=2)],
+            id="eq",
+        ),
+        pytest.param(
+            lambda col, val: col != val,
+            [timedelta(hours=1), timedelta(hours=3)],
+            id="ne",
+        ),
+    ],
+)
+def test_duration_comparison_with_timedelta(
+    op: Any, expected_durations: list[timedelta]
+) -> None:
+    df = pl.DataFrame(
+        {"duration": [timedelta(hours=1), timedelta(hours=2), timedelta(hours=3)]}
+    )
+    result = df.filter(op(pl.col("duration"), timedelta(hours=2)))
+    expected = pl.DataFrame({"duration": expected_durations})
+    assert_frame_equal(result, expected)
