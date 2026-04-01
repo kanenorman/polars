@@ -40,6 +40,8 @@ use arrow::types::NativeType;
 use chrono::TimeZone;
 use memchr::{memchr_iter, memchr3};
 use num_traits::NumCast;
+#[cfg(feature = "dtype-duration")]
+use polars_core::fmt::iso_duration_string;
 use polars_core::prelude::*;
 use polars_utils::float16::pf16;
 
@@ -347,7 +349,8 @@ fn decimal_serializer(array: &PrimitiveArray<i128>, scale: usize) -> impl Serial
 #[cfg(any(
     feature = "dtype-date",
     feature = "dtype-time",
-    feature = "dtype-datetime"
+    feature = "dtype-datetime",
+    feature = "dtype-duration"
 ))]
 fn callback_serializer<'a, T: NativeType, const QUOTE_NON_NULL: bool>(
     array: &'a PrimitiveArray<T>,
@@ -412,7 +415,8 @@ fn date_and_time_serializer<'a, Underlying: NativeType, T: std::fmt::Display>(
 #[cfg(any(
     feature = "dtype-date",
     feature = "dtype-time",
-    feature = "dtype-datetime"
+    feature = "dtype-datetime",
+    feature = "dtype-duration"
 ))]
 fn date_and_time_final_serializer<'a, T: NativeType>(
     array: &'a PrimitiveArray<T>,
@@ -894,6 +898,24 @@ pub(super) fn serializer_for<'a>(
         #[cfg(feature = "dtype-decimal")]
         DataType::Decimal(_, scale) => {
             quote_wrapper!(decimal_serializer, *scale)
+        },
+        #[cfg(feature = "dtype-duration")]
+        DataType::Duration(time_unit) => {
+            let array = array
+                .as_any()
+                .downcast_ref::<PrimitiveArray<i64>>()
+                .expect(ARRAY_MISMATCH_MSG);
+            let time_unit = *time_unit;
+            let mut scratch = String::new();
+            date_and_time_final_serializer(
+                array,
+                move |v, buf| {
+                    scratch.clear();
+                    iso_duration_string(&mut scratch, v, time_unit);
+                    buf.extend_from_slice(scratch.as_bytes());
+                },
+                options,
+            )
         },
         _ => {
             polars_bail!(ComputeError: "datatype {dtype} cannot be written to CSV\n\nConsider using JSON or a binary format.")
