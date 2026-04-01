@@ -135,6 +135,39 @@ fn write_dates() {
 }
 
 #[test]
+#[cfg(feature = "dtype-duration")]
+fn write_durations() {
+    use std::num::NonZeroUsize;
+
+    use polars::prelude::*;
+
+    let s = Series::new("dur".into(), [Some(0i64), Some(1_500), Some(-1_500), None])
+        .into_duration(TimeUnit::Milliseconds)
+        .into_series()
+        .into_column();
+    let s_ns = Series::new(
+        "dur_ns".into(),
+        [Some(90_061_000_000_000i64), Some(-500_000_000), None, None],
+    )
+    .into_duration(TimeUnit::Nanoseconds)
+    .into_series()
+    .into_column();
+
+    let mut df = DataFrame::new_infer_height(vec![s, s_ns]).unwrap();
+    let mut buf: Vec<u8> = Vec::new();
+    CsvWriter::new(&mut buf)
+        .include_header(true)
+        .with_batch_size(NonZeroUsize::new(1).unwrap())
+        .finish(&mut df)
+        .expect("csv written");
+    let csv = std::str::from_utf8(&buf).unwrap();
+    assert_eq!(
+        "dur,dur_ns\nPT0S,P1DT1H1M1S\nPT1.5S,-PT0.5S\n-PT1.5S,\n,\n",
+        csv,
+    );
+}
+
+#[test]
 fn test_read_csv_file() {
     let file = std::fs::File::open(FOODS_CSV).unwrap();
     let df = CsvReadOptions::default()

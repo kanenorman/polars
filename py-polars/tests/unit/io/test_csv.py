@@ -1442,6 +1442,41 @@ def test_time_format(chunk_override: None, fmt: str, expected: str) -> None:
     assert csv == expected
 
 
+@pytest.mark.parametrize(
+    ("values", "dtype", "expected"),
+    [
+        (
+            [timedelta(days=1, hours=1, minutes=1, seconds=1), None],
+            pl.Duration("ms"),
+            "d\nP1DT1H1M1S\n\n",
+        ),
+        (
+            [timedelta(seconds=1, microseconds=500000), None],
+            pl.Duration("us"),
+            "d\nPT1.5S\n\n",
+        ),
+        (
+            [timedelta(seconds=-1), None],
+            pl.Duration("ns"),
+            "d\n-PT1S\n\n",
+        ),
+        (
+            [timedelta(0), None],
+            pl.Duration("us"),
+            "d\nPT0S\n\n",
+        ),
+    ],
+)
+def test_duration_write_csv(
+    chunk_override: None,
+    values: list[timedelta | None],
+    dtype: pl.Duration,
+    expected: str,
+) -> None:
+    df = pl.DataFrame({"d": values}, schema={"d": dtype})
+    assert df.write_csv() == expected
+
+
 @pytest.mark.parametrize("dtype", [pl.Float32, pl.Float64])
 def test_float_precision(chunk_override: None, dtype: pl.Float32 | pl.Float64) -> None:
     df = pl.Series("col", [1.0, 2.2, 3.33], dtype=dtype).to_frame()
